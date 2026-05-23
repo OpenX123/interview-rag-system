@@ -117,8 +117,9 @@ public class RagChatController {
             @PathVariable Long sessionId,
             @Valid @RequestBody SendMessageRequest request) {
 
-        log.info("收到 RAG 聊天流式请求: sessionId={}, question={}, 线程: {} (虚拟线程: {})",
-            sessionId, request.question(), Thread.currentThread(), Thread.currentThread().isVirtual());
+        log.info("收到 RAG 聊天流式请求: sessionId={}, question={}, webSearch={}, 线程: {} (虚拟线程: {})",
+            sessionId, request.question(), request.webSearchOn(),
+            Thread.currentThread(), Thread.currentThread().isVirtual());
 
         // 1. 准备消息（保存用户消息，创建 AI 消息占位）
         Long messageId = sessionService.prepareStreamMessage(sessionId, request.question());
@@ -126,7 +127,7 @@ public class RagChatController {
         // 2. 获取流式响应
         StringBuilder fullContent = new StringBuilder();
 
-        return sessionService.getStreamAnswer(sessionId, request.question())
+        return sessionService.getStreamAnswer(sessionId, request.question(), request.webSearchOn())
             .doOnNext(fullContent::append)
             // 使用 ServerSentEvent 包装，转义换行符避免破坏 SSE 格式
             .map(chunk -> ServerSentEvent.<String>builder()

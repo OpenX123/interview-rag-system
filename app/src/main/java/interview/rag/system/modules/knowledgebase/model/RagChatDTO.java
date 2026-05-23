@@ -25,11 +25,18 @@ public class RagChatDTO {
 
     /**
      * 发送消息请求
+     * enableWebSearch 为 null 时按 false 处理（兼容旧客户端）
      */
     public record SendMessageRequest(
         @NotBlank(message = "问题不能为空")
-        String question
-    ) {}
+        String question,
+
+        Boolean enableWebSearch
+    ) {
+        public boolean webSearchOn() {
+            return Boolean.TRUE.equals(enableWebSearch);
+        }
+    }
 
     /**
      * 更新标题请求

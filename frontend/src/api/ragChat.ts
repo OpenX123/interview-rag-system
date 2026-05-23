@@ -107,13 +107,15 @@ export const ragChatApi = {
 
   /**
    * 发送消息（流式SSE）
+   * @param enableWebSearch 是否启用 Tavily 联网搜索（默认 false）
    */
   async sendMessageStream(
     sessionId: number,
     question: string,
     onMessage: (chunk: string) => void,
     onComplete: () => void,
-    onError: (error: Error) => void
+    onError: (error: Error) => void,
+    enableWebSearch = false
   ): Promise<void> {
     try {
       const response = await fetch(
@@ -121,7 +123,7 @@ export const ragChatApi = {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question }),
+          body: JSON.stringify({ question, enableWebSearch }),
         }
       );
 

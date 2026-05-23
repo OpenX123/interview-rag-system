@@ -2,6 +2,8 @@ package interview.rag.system.modules.knowledgebase.service;
 
 import interview.rag.system.common.ai.LlmProviderRegistry;
 import interview.rag.system.common.ai.PromptSecurityConstants;
+import interview.rag.system.common.ai.web.TavilySearchService;
+import interview.rag.system.common.ai.web.TavilySearchService.TavilyResult;
 import interview.rag.system.common.exception.BusinessException;
 import interview.rag.system.common.exception.ErrorCode;
 import interview.rag.system.modules.knowledgebase.model.QueryRequest;
@@ -44,6 +46,7 @@ public class KnowledgeBaseQueryService {
     private final KnowledgeBaseVectorService vectorService;
     private final KnowledgeBaseListService listService;
     private final KnowledgeBaseCountService countService;
+    private final TavilySearchService tavilySearchService;
     private final PromptTemplate systemPromptTemplate;
     private final PromptTemplate userPromptTemplate;
     private final PromptTemplate rewritePromptTemplate;
@@ -60,12 +63,14 @@ public class KnowledgeBaseQueryService {
             KnowledgeBaseVectorService vectorService,
             KnowledgeBaseListService listService,
             KnowledgeBaseCountService countService,
+            TavilySearchService tavilySearchService,
             KnowledgeBaseQueryProperties queryProperties,
             ResourceLoader resourceLoader) throws IOException {
         this.llmProviderRegistry = llmProviderRegistry;
         this.vectorService = vectorService;
         this.listService = listService;
         this.countService = countService;
+        this.tavilySearchService = tavilySearchService;
         this.systemPromptTemplate = new PromptTemplate(
             resourceLoader.getResource(queryProperties.getSystemPromptPath())
                 .getContentAsString(StandardCharsets.UTF_8)
@@ -195,15 +200,24 @@ public class KnowledgeBaseQueryService {
 
     /**
      * 流式查询知识库（SSE，支持多轮上下文）
+     */
+    public Flux<String> answerQuestionStream(List<Long> knowledgeBaseIds, String question, List<Message> history) {
+        return answerQuestionStream(knowledgeBaseIds, question, history, false);
+    }
+
+    /**
+     * 流式查询知识库（SSE，支持多轮上下文 + 可选联网搜索）
      *
      * @param knowledgeBaseIds 知识库ID列表
      * @param question 用户问题
      * @param history 历史对话消息（可选）
+     * @param enableWebSearch 是否启用 Tavily 联网搜索（与向量结果合并喂给 LLM）
      * @return 流式响应
      */
-    public Flux<String> answerQuestionStream(List<Long> knowledgeBaseIds, String question, List<Message> history) {
-        log.info("收到知识库流式提问: kbIds={}, question={}, historySize={}", knowledgeBaseIds, question,
-                history != null ? history.size() : 0);
+    public Flux<String> answerQuestionStream(List<Long> knowledgeBaseIds, String question,
+                                             List<Message> history, boolean enableWebSearch) {
+        log.info("收到知识库流式提问: kbIds={}, question={}, historySize={}, webSearch={}",
+                knowledgeBaseIds, question, history != null ? history.size() : 0, enableWebSearch);
         if (knowledgeBaseIds == null || knowledgeBaseIds.isEmpty() || normalizeQuestion(question).isBlank()) {
             return Flux.just(NO_RESULT_RESPONSE);
         }
@@ -217,16 +231,32 @@ public class KnowledgeBaseQueryService {
             QueryContext queryContext = buildQueryContext(question, effectiveHistory);
             List<Document> relevantDocs = retrieveRelevantDocs(queryContext, knowledgeBaseIds);
 
-            if (!hasEffectiveHit(relevantDocs)) {
+            // 3. 可选：联网搜索（Tavily）作为补充上下文
+            //    使用 rewrite 后的 query（candidateQueries 首项），更利于公网检索
+            String webContext = "";
+            if (enableWebSearch) {
+                String webQuery = queryContext.candidateQueries().isEmpty()
+                    ? queryContext.originalQuestion()
+                    : queryContext.candidateQueries().getFirst();
+                List<TavilyResult> webResults = tavilySearchService.search(webQuery);
+                webContext = tavilySearchService.formatAsContext(webResults);
+            }
+
+            boolean hasVectorHit = hasEffectiveHit(relevantDocs);
+            boolean hasWebHit = !webContext.isBlank();
+
+            // 向量库未命中且联网也无结果 → 返回标准无结果话术
+            if (!hasVectorHit && !hasWebHit) {
                 return Flux.just(NO_RESULT_RESPONSE);
             }
 
-            // 3. 构建上下文
-            String context = relevantDocs.stream()
-                    .map(Document::getText)
-                    .collect(Collectors.joining("\n\n---\n\n"));
+            // 4. 合并上下文：向量段 + 网络段（任一段缺失则只用另一段）
+            String vectorContext = hasVectorHit
+                ? relevantDocs.stream().map(Document::getText).collect(Collectors.joining("\n\n---\n\n"))
+                : "";
+            String context = mergeContext(vectorContext, webContext);
 
-            log.debug("检索到 {} 个相关文档片段", relevantDocs.size());
+            log.debug("检索到 {} 个向量片段，联网补充 {} 字", relevantDocs.size(), webContext.length());
 
             // 4. 构建提示词
             String systemPrompt = buildSystemPrompt();
@@ -362,6 +392,25 @@ public class KnowledgeBaseQueryService {
 
     private boolean hasEffectiveHit(List<Document> docs) {
         return docs != null && !docs.isEmpty();
+    }
+
+    /**
+     * 合并向量段与联网段为单一上下文。任一段为空则只返回另一段。
+     */
+    private String mergeContext(String vectorContext, String webContext) {
+        boolean hasVector = vectorContext != null && !vectorContext.isBlank();
+        boolean hasWeb = webContext != null && !webContext.isBlank();
+        if (hasVector && hasWeb) {
+            return "## 知识库片段\n" + vectorContext
+                + "\n\n---\n\n## 联网检索补充（Tavily）\n" + webContext;
+        }
+        if (hasVector) {
+            return vectorContext;
+        }
+        if (hasWeb) {
+            return "## 联网检索补充（Tavily）\n" + webContext;
+        }
+        return "";
     }
 
     private String normalizeAnswer(String answer) {

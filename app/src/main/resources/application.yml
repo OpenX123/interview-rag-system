@@ -177,6 +177,15 @@ app:
         topk-long: ${APP_AI_RAG_TOPK_LONG:8}
         min-score-short: ${APP_AI_RAG_MIN_SCORE_SHORT:0.18}
         min-score-default: ${APP_AI_RAG_MIN_SCORE_DEFAULT:0.28}
+    # 联网搜索（Tavily）：RAG 问答的可选补充。前端开关开启时，
+    # 把 Tavily 检索结果与向量结果合并喂给 LLM。api-key 为空时整功能禁用。
+    web-search:
+      tavily:
+        api-key: ${TAVILY_API_KEY:}
+        base-url: ${TAVILY_BASE_URL:https://api.tavily.com}
+        max-results: ${TAVILY_MAX_RESULTS:5}
+        search-depth: ${TAVILY_SEARCH_DEPTH:basic}
+        timeout-seconds: ${TAVILY_TIMEOUT_SECONDS:10}
   interview:
     follow-up-count: ${APP_INTERVIEW_FOLLOW_UP_COUNT:1}
     evaluation:

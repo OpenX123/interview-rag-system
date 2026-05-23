@@ -8,7 +8,7 @@ import {ragChatApi, type RagChatSessionListItem} from '../api/ragChat';
 import {formatDateOnly} from '../utils/date';
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog';
 import CodeBlock from '../components/CodeBlock';
-import {ChevronLeft, ChevronRight, Edit, MessageSquare, Pin, Plus, Trash2,} from 'lucide-react';
+import {ChevronLeft, ChevronRight, Edit, Globe, MessageSquare, Pin, Plus, Trash2,} from 'lucide-react';
 
 interface KnowledgeBaseQueryPageProps {
   onBack: () => void;
@@ -55,6 +55,8 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
   const [question, setQuestion] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  // 联网搜索开关（Tavily）：会话内有效，不持久化
+  const [webSearchEnabled, setWebSearchEnabled] = useState(false);
 
   // refs
   const virtuosoRef = useRef<VirtuosoHandle>(null);
@@ -327,7 +329,8 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
           console.error('流式查询失败:', error);
           updateAssistantMessage(fullContent || error.message || '回答失败，请重试');
           setLoading(false);
-        }
+        },
+        webSearchEnabled
       );
     } catch (err) {
       console.error('发起流式查询失败:', err);
@@ -585,12 +588,28 @@ export default function KnowledgeBaseQueryPage({ onBack, onUpload }: KnowledgeBa
                 {/* 输入区域 */}
                 <div className="p-4 border-t border-slate-200 dark:border-slate-600">
                   <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setWebSearchEnabled((v) => !v)}
+                      disabled={loading}
+                      title={webSearchEnabled ? '联网搜索：开启（Tavily）' : '联网搜索：关闭'}
+                      className={
+                        'flex items-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all border ' +
+                        (webSearchEnabled
+                          ? 'bg-primary-500 text-white border-primary-500 hover:bg-primary-600'
+                          : 'bg-white dark:bg-slate-700 text-slate-500 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600') +
+                        ' disabled:opacity-50 disabled:cursor-not-allowed'
+                      }
+                    >
+                      <Globe size={16} />
+                      <span className="hidden sm:inline">联网</span>
+                    </button>
                     <input
                       type="text"
                       value={question}
                       onChange={(e) => setQuestion(e.target.value)}
                       onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSubmitQuestion()}
-                      placeholder="输入您的问题..."
+                      placeholder={webSearchEnabled ? '已启用联网搜索，输入问题...' : '输入您的问题...'}
                       className="flex-1 px-4 py-2.5 border border-slate-200 dark:border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400"
                       disabled={loading}
                     />

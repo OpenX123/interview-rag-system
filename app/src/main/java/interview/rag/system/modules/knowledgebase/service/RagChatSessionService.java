@@ -163,6 +163,13 @@ public class RagChatSessionService {
      * 获取流式回答（带多轮上下文）
      */
     public Flux<String> getStreamAnswer(Long sessionId, String question) {
+        return getStreamAnswer(sessionId, question, false);
+    }
+
+    /**
+     * 获取流式回答（带多轮上下文 + 可选联网搜索）
+     */
+    public Flux<String> getStreamAnswer(Long sessionId, String question, boolean enableWebSearch) {
         RagChatSessionEntity session = sessionRepository.findByIdWithKnowledgeBases(sessionId)
             .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "会话不存在"));
 
@@ -170,8 +177,9 @@ public class RagChatSessionService {
         List<Message> history = queryProperties.getHistory().isEnabled()
             ? loadHistoryMessages(sessionId) : List.of();
 
-        log.info("加载历史上下文: sessionId={}, historySize={}", sessionId, history.size());
-        return queryService.answerQuestionStream(kbIds, question, history);
+        log.info("加载历史上下文: sessionId={}, historySize={}, webSearch={}",
+            sessionId, history.size(), enableWebSearch);
+        return queryService.answerQuestionStream(kbIds, question, history, enableWebSearch);
     }
 
     /**
