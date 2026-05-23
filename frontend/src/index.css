@@ -1,0 +1,277 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Inter:wght@400;500;600;700&display=swap');
+@plugin "@tailwindcss/typography";
+
+/* Claude 风格：强制亮色模式，保留 dark variant 但永不激活 */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ===== Claude 设计系统色板 =====
+   背景: #FAF9F5 暖白
+   卡片: #FFFFFF
+   主色(Clay/橙): #D97757
+   文字主: #2F2F2C
+   文字次: #6B6962
+   边框:   #E8E6DC 米灰
+*/
+@theme {
+  /* Primary —— Claude Clay/橙色梯度 */
+  --color-primary-50:  #FBEFE8;
+  --color-primary-100: #F6DCCD;
+  --color-primary-200: #EFC0A8;
+  --color-primary-300: #E59E80;
+  --color-primary-400: #DC8466;
+  --color-primary-500: #D97757;
+  --color-primary-600: #C15F3C;
+  --color-primary-700: #A04C2E;
+  --color-primary-800: #803C25;
+  --color-primary-900: #5F2D1D;
+  --color-primary-950: #3A1B11;
+
+  /* Surface —— 暖中性色（覆盖默认 slate，使所有 slate-* 自动呼应 Claude 调性） */
+  --color-slate-50:  #FAF9F5;
+  --color-slate-100: #F4F2EA;
+  --color-slate-200: #E8E6DC;
+  --color-slate-300: #D6D3C5;
+  --color-slate-400: #A8A59A;
+  --color-slate-500: #87857B;
+  --color-slate-600: #6B6962;
+  --color-slate-700: #4B4A45;
+  --color-slate-800: #2F2F2C;
+  --color-slate-900: #1F1F1D;
+  --color-slate-950: #131312;
+
+  /* 字体 —— 标题用衬线（Source Serif 4 → 接近 Tiempos），正文 Inter */
+  --font-display: 'Source Serif 4', 'Tiempos Text', Georgia, 'PingFang SC', serif;
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+/* ===== 基础样式 ===== */
+@layer base {
+  html, body, #root {
+    @apply h-full m-0 p-0;
+  }
+
+  body {
+    @apply antialiased text-slate-800;
+    font-family: var(--font-sans);
+    background-color: #FAF9F5;
+    background-image:
+      radial-gradient(circle at 0% 0%, rgba(217, 119, 87, 0.04) 0, transparent 50%),
+      radial-gradient(circle at 100% 100%, rgba(217, 119, 87, 0.03) 0, transparent 50%);
+    background-attachment: fixed;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    @apply font-semibold tracking-tight text-slate-900;
+    letter-spacing: -0.015em;
+  }
+
+  /* 选区颜色 */
+  ::selection {
+    background-color: rgba(217, 119, 87, 0.25);
+    color: #2F2F2C;
+  }
+}
+
+/* ===== 组件级原子样式 ===== */
+@layer components {
+  /* 卡片：白底 + 细米色边框 + 极轻阴影（Claude 卡片观感） */
+  .dark-card {
+    @apply bg-white rounded-xl border border-slate-200;
+    box-shadow: 0 1px 2px 0 rgba(31, 31, 29, 0.04);
+  }
+
+  /* 输入框 */
+  .dark-input {
+    @apply bg-white border border-slate-200 text-slate-900 rounded-lg;
+    @apply focus:ring-2 focus:ring-primary-500/15 focus:border-primary-500;
+    @apply transition-colors duration-150;
+  }
+
+  /* 文字 */
+  .dark-text {
+    @apply text-slate-900;
+  }
+
+  .dark-text-muted {
+    @apply text-slate-600;
+  }
+
+  /* 主按钮：Claude 实心橙 */
+  .btn-primary {
+    @apply bg-primary-500 text-white font-medium rounded-lg;
+    @apply hover:bg-primary-600 active:bg-primary-700;
+    @apply transition-colors duration-150;
+    box-shadow: 0 1px 2px 0 rgba(193, 95, 60, 0.18);
+  }
+
+  /* 次按钮：米白底 + 暖灰边 */
+  .btn-secondary {
+    @apply bg-white text-slate-800 font-medium rounded-lg;
+    @apply border border-slate-200 hover:bg-slate-100 hover:border-slate-300;
+    @apply transition-colors duration-150;
+  }
+
+  /* 徽章 */
+  .status-badge {
+    @apply px-2.5 py-1 rounded-md text-xs font-medium;
+    @apply border bg-white;
+  }
+}
+
+/* ===== 滚动条（Claude 风格：极细、低对比） ===== */
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar {
+    @apply w-1.5 h-1.5;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: #D6D3C5;
+    @apply rounded-full;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: #A8A59A;
+  }
+
+  /* Claude 标志性细标线分隔 */
+  .claude-divider {
+    height: 1px;
+    background: linear-gradient(to right, transparent, #E8E6DC 20%, #E8E6DC 80%, transparent);
+  }
+}
+
+/* ===== React Big Calendar：贴合 Claude 米白调 ===== */
+@layer components {
+  .rbc-calendar {
+    @apply font-sans;
+  }
+
+  .rbc-toolbar {
+    @apply mb-6;
+  }
+
+  .rbc-toolbar button {
+    @apply px-3.5 py-1.5 rounded-md text-sm font-medium;
+    @apply bg-white text-slate-700 border border-slate-200;
+    @apply hover:bg-slate-100 hover:border-slate-300;
+    @apply transition-colors duration-150;
+  }
+
+  .rbc-toolbar button.rbc-active {
+    @apply bg-primary-500 text-white border-primary-500;
+    @apply hover:bg-primary-600 hover:border-primary-600;
+  }
+
+  .rbc-toolbar-label {
+    font-family: var(--font-display);
+    @apply font-semibold text-xl text-slate-900;
+  }
+
+  .rbc-header {
+    font-family: var(--font-sans);
+    @apply py-2.5 font-medium text-xs uppercase tracking-wider;
+    @apply bg-slate-50 text-slate-600;
+    @apply border-b border-slate-200;
+  }
+
+  .rbc-month-view, .rbc-time-view, .rbc-agenda-view {
+    @apply rounded-lg overflow-hidden;
+    @apply border border-slate-200 bg-white;
+  }
+
+  .rbc-day-bg, .rbc-time-header-content, .rbc-time-gutter {
+    @apply bg-white;
+  }
+
+  .rbc-off-range-bg {
+    @apply bg-slate-50;
+  }
+
+  .rbc-today {
+    background-color: rgba(217, 119, 87, 0.08);
+  }
+
+  .rbc-time-slot {
+    @apply border-slate-100;
+  }
+
+  .rbc-event {
+    @apply rounded-md;
+    background-color: #D97757 !important;
+    border: none !important;
+    @apply transition-opacity duration-150;
+  }
+
+  .rbc-event:hover {
+    opacity: 0.85;
+  }
+
+  .rbc-event-content {
+    @apply font-medium;
+  }
+
+  .rbc-month-row {
+    @apply border-slate-200;
+  }
+
+  .rbc-day-slot .rbc-time-slot {
+    @apply border-slate-100;
+  }
+
+  .rbc-time-view-resources .rbc-time-gutter {
+    @apply bg-slate-50;
+  }
+
+  .rbc-time-header-content {
+    @apply border-slate-200;
+  }
+
+  .rbc-agenda-view table.rbc-agenda-table {
+    @apply border-slate-200 bg-white;
+  }
+
+  .rbc-agenda-view table.rbc-agenda-table tbody > tr > td {
+    @apply border-slate-100 py-3 px-4;
+  }
+
+  .rbc-agenda-view table.rbc-agenda-table .rbc-agenda-time-cell {
+    @apply font-medium text-slate-700;
+  }
+
+  .rbc-show-more {
+    @apply font-medium text-primary-600 hover:text-primary-700;
+    @apply transition-colors duration-150;
+  }
+}
+
+/* ===== prose（Markdown 渲染）调优为 Claude 阅读手感 ===== */
+@layer base {
+  .prose {
+    --tw-prose-body: #2F2F2C;
+    --tw-prose-headings: #1F1F1D;
+    --tw-prose-links: #C15F3C;
+    --tw-prose-bold: #1F1F1D;
+    --tw-prose-quotes: #4B4A45;
+    --tw-prose-quote-borders: #E8E6DC;
+    --tw-prose-code: #C15F3C;
+    --tw-prose-pre-code: #F4F2EA;
+    --tw-prose-pre-bg: #1F1F1D;
+    --tw-prose-th-borders: #E8E6DC;
+    --tw-prose-td-borders: #E8E6DC;
+  }
+
+  .prose h1, .prose h2, .prose h3, .prose h4 {
+    font-family: var(--font-display);
+  }
+}

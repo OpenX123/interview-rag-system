@@ -1,0 +1,29 @@
+# Ignore Gradle project-specific cache directory
+.gradle
+
+# Ignore Gradle build output directory
+build
+/.claude
+/.idea
+/app/bin
+# Environment variables
+.env
+test-output.txt
+# IDEA code analysis
+qodana.yaml
+
+app/src/main/resources/application-dev.yml
+/docs
+SETUP_API_KEYS.md
+
+# AI Assistant documentation
+CLAUDE.md
+GEMINI.md
+
+# Playwright MCP
+.playwright-mcp/
+
+# 应用运行时日志（logging.file.name=logs/app.log + 滚动归档）
+logs/
+*.log
+*.log.gz
