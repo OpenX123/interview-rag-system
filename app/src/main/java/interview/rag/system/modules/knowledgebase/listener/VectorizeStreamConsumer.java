@@ -33,7 +33,11 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
         this.knowledgeBaseRepository = knowledgeBaseRepository;
     }
 
-    record VectorizePayload(Long kbId, String content) {}
+    /**
+     * @param chunkSize 用户指定的分块大小（token 数），null 表示用默认
+     * @param embeddingProvider 用户指定的 embedding provider，null 表示用全局默认
+     */
+    record VectorizePayload(Long kbId, String content, Integer chunkSize, String embeddingProvider) {}
 
     @Override
     protected String taskDisplayName() {
@@ -68,7 +72,18 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
             log.warn("消息格式错误，跳过: messageId={}", messageId);
             return null;
         }
-        return new VectorizePayload(Long.parseLong(kbIdStr), content);
+        Integer chunkSize = parseInt(data.get(AsyncTaskStreamConstants.FIELD_CHUNK_SIZE));
+        String embeddingProvider = nullIfBlank(data.get(AsyncTaskStreamConstants.FIELD_EMBEDDING_PROVIDER));
+        return new VectorizePayload(Long.parseLong(kbIdStr), content, chunkSize, embeddingProvider);
+    }
+
+    private static Integer parseInt(String s) {
+        if (s == null || s.isBlank()) return null;
+        try { return Integer.parseInt(s); } catch (NumberFormatException e) { return null; }
+    }
+
+    private static String nullIfBlank(String s) {
+        return (s == null || s.isBlank()) ? null : s;
     }
 
     @Override
@@ -83,7 +98,17 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
 
     @Override
     protected void processBusiness(VectorizePayload payload) {
-        vectorService.vectorizeAndStore(payload.kbId(), payload.content());
+        int actualChunks = vectorService.vectorizeAndStore(
+            payload.kbId(),
+            payload.content(),
+            payload.chunkSize(),
+            payload.embeddingProvider()
+        );
+        // 立即回填 chunkCount，避免列表统计字段一直显示 0
+        knowledgeBaseRepository.findById(payload.kbId()).ifPresent(kb -> {
+            kb.setChunkCount(actualChunks);
+            knowledgeBaseRepository.save(kb);
+        });
     }
 
     @Override
@@ -101,11 +126,16 @@ public class VectorizeStreamConsumer extends AbstractStreamConsumer<VectorizeStr
         Long kbId = payload.kbId();
         String content = payload.content();
         try {
-            Map<String, String> message = Map.of(
-                AsyncTaskStreamConstants.FIELD_KB_ID, kbId.toString(),
-                AsyncTaskStreamConstants.FIELD_CONTENT, content,
-                AsyncTaskStreamConstants.FIELD_RETRY_COUNT, String.valueOf(retryCount)
-            );
+            java.util.Map<String, String> message = new java.util.HashMap<>();
+            message.put(AsyncTaskStreamConstants.FIELD_KB_ID, kbId.toString());
+            message.put(AsyncTaskStreamConstants.FIELD_CONTENT, content);
+            message.put(AsyncTaskStreamConstants.FIELD_RETRY_COUNT, String.valueOf(retryCount));
+            if (payload.chunkSize() != null) {
+                message.put(AsyncTaskStreamConstants.FIELD_CHUNK_SIZE, String.valueOf(payload.chunkSize()));
+            }
+            if (payload.embeddingProvider() != null) {
+                message.put(AsyncTaskStreamConstants.FIELD_EMBEDDING_PROVIDER, payload.embeddingProvider());
+            }
 
             redisService().streamAdd(
                 AsyncTaskStreamConstants.KB_VECTORIZE_STREAM_KEY,

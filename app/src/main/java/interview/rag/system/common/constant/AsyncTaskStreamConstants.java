@@ -66,6 +66,16 @@ public final class AsyncTaskStreamConstants {
      */
     public static final String FIELD_KB_ID = "kbId";
 
+    /**
+     * 知识库向量化分块大小字段（token 数）。可选，缺省走 TokenTextSplitter 默认
+     */
+    public static final String FIELD_CHUNK_SIZE = "chunkSize";
+
+    /**
+     * 知识库向量化 embedding provider 字段。可选，缺省走全局默认 EmbeddingModel
+     */
+    public static final String FIELD_EMBEDDING_PROVIDER = "embeddingProvider";
+
     // ========== 简历分析 Stream 配置 ==========
 
     /**

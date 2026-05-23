@@ -8,6 +8,7 @@ import interview.rag.system.modules.knowledgebase.repository.KnowledgeBaseReposi
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -20,7 +21,11 @@ public class VectorizeStreamProducer extends AbstractStreamProducer<VectorizeStr
 
     private final KnowledgeBaseRepository knowledgeBaseRepository;
 
-    record VectorizeTaskPayload(Long kbId, String content) {}
+    /**
+     * @param chunkSize 用户指定的分块大小（token 数），null 表示用 TokenTextSplitter 默认
+     * @param embeddingProvider 用户指定的 embedding provider id，null 表示用全局默认
+     */
+    record VectorizeTaskPayload(Long kbId, String content, Integer chunkSize, String embeddingProvider) {}
 
     public VectorizeStreamProducer(RedisService redisService, KnowledgeBaseRepository knowledgeBaseRepository) {
         super(redisService);
@@ -32,9 +37,11 @@ public class VectorizeStreamProducer extends AbstractStreamProducer<VectorizeStr
      *
      * @param kbId    知识库ID
      * @param content 文档内容
+     * @param chunkSize 用户指定分块大小，null 表示用默认
+     * @param embeddingProvider 用户指定 embedding provider，null 表示用全局默认
      */
-    public void sendVectorizeTask(Long kbId, String content) {
-        sendTask(new VectorizeTaskPayload(kbId, content));
+    public void sendVectorizeTask(Long kbId, String content, Integer chunkSize, String embeddingProvider) {
+        sendTask(new VectorizeTaskPayload(kbId, content, chunkSize, embeddingProvider));
     }
 
     @Override
@@ -49,11 +56,17 @@ public class VectorizeStreamProducer extends AbstractStreamProducer<VectorizeStr
 
     @Override
     protected Map<String, String> buildMessage(VectorizeTaskPayload payload) {
-        return Map.of(
-            AsyncTaskStreamConstants.FIELD_KB_ID, payload.kbId().toString(),
-            AsyncTaskStreamConstants.FIELD_CONTENT, payload.content(),
-            AsyncTaskStreamConstants.FIELD_RETRY_COUNT, "0"
-        );
+        Map<String, String> msg = new HashMap<>();
+        msg.put(AsyncTaskStreamConstants.FIELD_KB_ID, payload.kbId().toString());
+        msg.put(AsyncTaskStreamConstants.FIELD_CONTENT, payload.content());
+        msg.put(AsyncTaskStreamConstants.FIELD_RETRY_COUNT, "0");
+        if (payload.chunkSize() != null) {
+            msg.put(AsyncTaskStreamConstants.FIELD_CHUNK_SIZE, String.valueOf(payload.chunkSize()));
+        }
+        if (payload.embeddingProvider() != null && !payload.embeddingProvider().isBlank()) {
+            msg.put(AsyncTaskStreamConstants.FIELD_EMBEDDING_PROVIDER, payload.embeddingProvider());
+        }
+        return msg;
     }
 
     @Override

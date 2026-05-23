@@ -34,6 +34,7 @@ public class KnowledgeBaseUploadService {
     private final FileValidationService fileValidationService;
     private final FileHashService fileHashService;
     private final VectorizeStreamProducer vectorizeStreamProducer;
+    private final KnowledgeBaseVectorService vectorService;
 
     private static final long MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
     
@@ -43,14 +44,18 @@ public class KnowledgeBaseUploadService {
      * @param file 知识库文件
      * @param name 知识库名称（可选，如果为空则从文件名提取）
      * @param category 分类（可选）
+     * @param chunkSize 用户指定分块大小（token 数），null 表示使用默认
+     * @param embeddingProvider 用户指定 embedding provider，null 表示使用全局默认
      * @return 上传结果和存储信息（包含duplicate字段，表示是否为重复上传）
      */
-    public Map<String, Object> uploadKnowledgeBase(MultipartFile file, String name, String category) {
+    public Map<String, Object> uploadKnowledgeBase(MultipartFile file, String name, String category,
+                                                    Integer chunkSize, String embeddingProvider) {
         // 1. 验证文件
         fileValidationService.validateFile(file, MAX_FILE_SIZE, "知识库");
 
         String fileName = file.getOriginalFilename();
-        log.info("收到知识库上传请求: {}, 大小: {} bytes, category: {}", fileName, file.getSize(), category);
+        log.info("收到知识库上传请求: {}, 大小: {} bytes, category: {}, chunkSize: {}, provider: {}",
+            fileName, file.getSize(), category, chunkSize, embeddingProvider);
 
         // 2. 验证文件类型
         String contentType = parseService.detectContentType(file);
@@ -76,10 +81,11 @@ public class KnowledgeBaseUploadService {
         log.info("知识库已存储到RustFS: {}", fileKey);
 
         // 6. 保存知识库元数据到数据库（状态为 PENDING）
-        KnowledgeBaseEntity savedKb = persistenceService.saveKnowledgeBase(file, name, category, fileKey, fileUrl, fileHash);
+        KnowledgeBaseEntity savedKb = persistenceService.saveKnowledgeBase(
+            file, name, category, fileKey, fileUrl, fileHash, chunkSize, embeddingProvider);
 
         // 7. 发送向量化任务到 Redis Stream（异步处理）
-        vectorizeStreamProducer.sendVectorizeTask(savedKb.getId(), content);
+        vectorizeStreamProducer.sendVectorizeTask(savedKb.getId(), content, chunkSize, embeddingProvider);
 
         log.info("知识库上传完成，向量化任务已入队: {}, kbId={}", fileName, savedKb.getId());
 
@@ -99,6 +105,23 @@ public class KnowledgeBaseUploadService {
             ),
             "duplicate", false
         );
+    }
+
+    /**
+     * 解析文件并切分成 chunks（不入库），用于「预览分块」。
+     */
+    public java.util.List<org.springframework.ai.document.Document> previewChunks(
+            MultipartFile file, Integer chunkSize) {
+        fileValidationService.validateFile(file, MAX_FILE_SIZE, "知识库");
+        String fileName = file.getOriginalFilename();
+        String contentType = parseService.detectContentType(file);
+        validateContentType(contentType, fileName);
+
+        String content = parseService.parseContent(file);
+        if (content == null || content.trim().isEmpty()) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "无法从文件中提取文本内容，请确保文件格式正确");
+        }
+        return vectorService.splitContent(content, chunkSize);
     }
 
     /**
@@ -135,10 +158,12 @@ public class KnowledgeBaseUploadService {
         // 2. 更新状态为 PENDING（通过单独的 Service 保证事务生效）
         persistenceService.updateVectorStatusToPending(kbId);
 
-        // 3. 发送向量化任务到 Stream
-        vectorizeStreamProducer.sendVectorizeTask(kbId, content);
+        // 3. 发送向量化任务到 Stream，沿用上次保存的 chunkSize/provider
+        vectorizeStreamProducer.sendVectorizeTask(
+            kbId, content, kb.getChunkSize(), kb.getEmbeddingProvider());
 
-        log.info("重新向量化任务已发送: kbId={}", kbId);
+        log.info("重新向量化任务已发送: kbId={}, chunkSize={}, provider={}",
+            kbId, kb.getChunkSize(), kb.getEmbeddingProvider());
     }
 }
 

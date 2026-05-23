@@ -88,4 +88,54 @@ public class VectorRepository {
             """;
         return jdbcTemplate.queryForList(sql, knowledgeBaseId.toString(), knowledgeBaseId);
     }
+
+    /**
+     * 统计指定知识库的向量块数量。
+     */
+    public int countByKnowledgeBaseId(Long knowledgeBaseId) {
+        String sql = """
+            SELECT COUNT(*) FROM vector_store
+            WHERE metadata->>'kb_id' = ?
+               OR (metadata->>'kb_id_long' IS NOT NULL AND (metadata->>'kb_id_long')::bigint = ?)
+            """;
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class,
+            knowledgeBaseId.toString(), knowledgeBaseId);
+        return count == null ? 0 : count;
+    }
+
+    /**
+     * 直接向 vector_store 表插入一条向量记录。
+     * 用于使用「指定 EmbeddingModel」时绕过 Spring AI 的 VectorStore 单例绑定。
+     * <p>
+     * 注意：
+     * - id 由 PostgreSQL uuid_generate_v4() 生成
+     * - metadataJson 必须是合法 JSON 字符串（用 ObjectMapper 序列化），通过 ::json 强转写入
+     * - embedding 通过 ::vector 强转写入 pgvector 列，格式如 "[0.1,0.2,...]"
+     */
+    public void insertVector(String content, String metadataJson, float[] embedding) {
+        if (embedding == null || embedding.length == 0) {
+            throw new IllegalArgumentException("embedding 不能为空");
+        }
+        String vectorLiteral = toVectorLiteral(embedding);
+        String sql = """
+            INSERT INTO vector_store (content, metadata, embedding)
+            VALUES (?, ?::json, ?::vector)
+            """;
+        jdbcTemplate.update(sql, content, metadataJson, vectorLiteral);
+    }
+
+    /**
+     * pgvector 字面量格式：[v1,v2,v3,...]，无空格以缩小传输体积。
+     */
+    private String toVectorLiteral(float[] embedding) {
+        StringBuilder sb = new StringBuilder(embedding.length * 8);
+        sb.append('[');
+        for (int i = 0; i < embedding.length; i++) {
+            if (i > 0) sb.append(',');
+            // 使用 Float.toString 保留默认精度，pgvector 接收 float4
+            sb.append(embedding[i]);
+        }
+        sb.append(']');
+        return sb.toString();
+    }
 }

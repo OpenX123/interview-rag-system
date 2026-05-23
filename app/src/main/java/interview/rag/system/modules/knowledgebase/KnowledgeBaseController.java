@@ -158,6 +158,9 @@ public class KnowledgeBaseController {
 
     /**
      * 上传知识库文件
+     *
+     * @param chunkSize 可选，分块大小（token 数）。缺省走 TokenTextSplitter 默认值（800）
+     * @param embeddingProvider 可选，embedding provider id（如 dashscope / glm）。缺省走全局默认
      */
     @PostMapping(value = "/api/knowledgebase/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @RateLimit(dimension = RateLimit.Dimension.GLOBAL, count = 3)
@@ -165,8 +168,46 @@ public class KnowledgeBaseController {
     public Result<Map<String, Object>> uploadKnowledgeBase(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "name", required = false) String name,
-            @RequestParam(value = "category", required = false) String category) {
-        return Result.success(uploadService.uploadKnowledgeBase(file, name, category));
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "chunkSize", required = false) Integer chunkSize,
+            @RequestParam(value = "embeddingProvider", required = false) String embeddingProvider) {
+        return Result.success(uploadService.uploadKnowledgeBase(
+            file, name, category, chunkSize, embeddingProvider));
+    }
+
+    /**
+     * 预览分块：上传文件 + 指定 chunkSize，返回切分结果（不入库、不向量化、不存储原文件）。
+     * 用于在真正上传前让用户确认切分粒度。
+     */
+    @PostMapping(value = "/api/knowledgebase/preview-chunks", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @RateLimit(dimension = RateLimit.Dimension.GLOBAL, count = 10)
+    @RateLimit(dimension = RateLimit.Dimension.IP, count = 5)
+    public Result<Map<String, Object>> previewChunks(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "chunkSize", required = false) Integer chunkSize) {
+        var docs = uploadService.previewChunks(file, chunkSize);
+        int total = docs.size();
+        int previewLimit = interview.rag.system.modules.knowledgebase.service.KnowledgeBaseVectorService.PREVIEW_MAX_CHUNKS;
+        int returned = Math.min(total, previewLimit);
+        List<KnowledgeBaseChunkDTO> previewChunks = new java.util.ArrayList<>(returned);
+        for (int i = 0; i < returned; i++) {
+            org.springframework.ai.document.Document doc = docs.get(i);
+            String content = doc.getText() != null ? doc.getText() : "";
+            previewChunks.add(new KnowledgeBaseChunkDTO(
+                "preview-" + i,
+                i,
+                total,
+                null,
+                content,
+                content.length()
+            ));
+        }
+        return Result.success(Map.of(
+            "totalChunks", total,
+            "returnedChunks", returned,
+            "truncated", total > returned,
+            "chunks", previewChunks
+        ));
     }
 
     /**

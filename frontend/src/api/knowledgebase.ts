@@ -20,6 +20,26 @@ export interface KnowledgeBaseItem {
   vectorStatus: VectorStatus;
   vectorError: string | null;
   chunkCount: number;
+  chunkSize: number | null;          // 用户上传时指定的分块大小
+  embeddingProvider: string | null;  // 用户上传时指定的 embedding provider
+}
+
+/**
+ * 上传时可配置的高级选项
+ */
+export interface UploadOptions {
+  chunkSize?: number;          // 分块大小（token 数）。缺省由后端默认 800
+  embeddingProvider?: string;  // embedding provider id。缺省走全局默认
+}
+
+/**
+ * 预览分块响应
+ */
+export interface PreviewChunksResponse {
+  totalChunks: number;     // 实际切出的总块数
+  returnedChunks: number;  // 本次返回的块数（最多 PREVIEW_MAX_CHUNKS）
+  truncated: boolean;      // 是否因数量限制被截断
+  chunks: KnowledgeBaseChunk[];
 }
 
 // 统计信息
@@ -72,7 +92,12 @@ export const knowledgeBaseApi = {
   /**
    * 上传知识库文件
    */
-  async uploadKnowledgeBase(file: File, name?: string, category?: string): Promise<UploadKnowledgeBaseResponse> {
+  async uploadKnowledgeBase(
+    file: File,
+    name?: string,
+    category?: string,
+    options?: UploadOptions,
+  ): Promise<UploadKnowledgeBaseResponse> {
     const formData = new FormData();
     formData.append('file', file);
     if (name) {
@@ -81,7 +106,25 @@ export const knowledgeBaseApi = {
     if (category) {
       formData.append('category', category);
     }
+    if (options?.chunkSize != null) {
+      formData.append('chunkSize', String(options.chunkSize));
+    }
+    if (options?.embeddingProvider) {
+      formData.append('embeddingProvider', options.embeddingProvider);
+    }
     return request.upload<UploadKnowledgeBaseResponse>('/api/knowledgebase/upload', formData);
+  },
+
+  /**
+   * 预览分块（不入库）。用于在上传前调整 chunkSize。
+   */
+  async previewChunks(file: File, chunkSize?: number): Promise<PreviewChunksResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (chunkSize != null) {
+      formData.append('chunkSize', String(chunkSize));
+    }
+    return request.upload<PreviewChunksResponse>('/api/knowledgebase/preview-chunks', formData);
   },
 
     /**

@@ -70,8 +70,15 @@ public class KnowledgeBaseEntity {
     @Column(length = 500)
     private String vectorError;
 
-    // 向量分块数量
+    // 向量分块数量（向量化完成后回填）
     private Integer chunkCount = 0;
+
+    // 用户指定的分块大小（token 数）。null 表示用默认 800
+    private Integer chunkSize;
+
+    // 用户指定的 embedding provider id（dashscope / glm 等）。null 表示用全局默认
+    @Column(length = 64)
+    private String embeddingProvider;
     
     @PrePersist
     protected void onCreate() {
@@ -217,6 +224,22 @@ public class KnowledgeBaseEntity {
 
     public void setChunkCount(Integer chunkCount) {
         this.chunkCount = chunkCount;
+    }
+
+    public Integer getChunkSize() {
+        return chunkSize;
+    }
+
+    public void setChunkSize(Integer chunkSize) {
+        this.chunkSize = chunkSize;
+    }
+
+    public String getEmbeddingProvider() {
+        return embeddingProvider;
+    }
+
+    public void setEmbeddingProvider(String embeddingProvider) {
+        this.embeddingProvider = embeddingProvider;
     }
 }
 
